@@ -1,0 +1,354 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Pixel Cat</title>
+<style>
+  /* rssh theme tokens; literals are rssh's dark values (standalone fallback).
+     The host's hello frame overrides them on :root. */
+  :root {
+    --bg: #2B2D3A;
+    --text: #E0E5EC;
+    --text-dim: #6B7A99;
+    --accent: #4A6CF7;
+    --magenta: #D670D6;
+  }
+  html, body { margin: 0; height: 100%; }
+  body {
+    width: fit-content;         /* shrink-wrap: the reported width IS the content */
+    padding: 0 4px;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    overflow: hidden;
+    background: var(--bg);
+    cursor: pointer;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  /* Two transform channels, two elements: #pen carries the walk position
+     (inline translateX), #cat carries the keyframe motions. Keyframes REPLACE
+     the whole transform property — sharing one element made every hop/bounce
+     drop the walked X (cat snapped left mid-animation, jumped back after). */
+  #pen { flex: 0 0 auto; }
+  #pen.walk { transition: transform .16s linear; }
+  #quip {
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    font: 11px/1 var(--term-font, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+    color: var(--text-dim);
+    opacity: 0;
+    transition: opacity .25s;
+  }
+  #quip.show { opacity: 1; }
+
+  /* Transient animations — set the class, remove it on animationend. */
+  #cat.hop    { animation: hop .45s ease-out; }
+  #cat.wiggle { animation: wiggle .55s ease-in-out; }
+  #cat.purr   { animation: purr 1.1s linear; }
+  #cat.bounce { animation: bounce .32s steps(2) infinite; }
+  @keyframes hop    { 30% { transform: translateY(-7px); } 65% { transform: translateY(0) scaleY(.88); } }
+  @keyframes wiggle { 25% { transform: scaleX(-1); } 50% { transform: scaleX(1); } 75% { transform: scaleX(-1); } }
+  @keyframes purr   { 0%, 7%, 14%, 21%, 28% { transform: translateX(0); } 3.5%, 10.5%, 17.5%, 24.5% { transform: translateX(1px); } }
+  @keyframes bounce { 50% { transform: translateY(-2px); } }
+</style>
+</head>
+<body>
+  <div id="pen"><canvas id="cat" width="32" height="22"></canvas></div>
+  <span id="quip"></span>
+
+<script>
+"use strict";
+// ── Pixel cat ─────────────────────────────────────────────────────────────
+// 16×11 grid drawn at scale 2. Chars: k outline(--text) f fur(--accent)
+// n pink(--magenta) e eye(--bg) . transparent. The tail lives in rows 5-7.
+
+const W = 16, H = 11, SCALE = 2;
+const HEAD = [
+  "...kk......kk...",
+  "...knk....knk...",
+  "...kffkkkkffk...",
+  "..kffffffffffk..",
+  "..kfeeffffeefk..",   // eyes
+  "..kffffffffffk",     // row 5 (tail appended per frame)
+  "..kffffnnffffk",     // nose (tail appended per frame)
+  "...kfffkkfffk",      // mouth (tail appended per frame)
+  "..kffkkkkkkffk..",
+  ".kffffffffffffk.",
+  "..kk.kk..kk.kk..",   // paws
+];
+const TAIL_UP    = ["k", "kkk", ".k."];
+const TAIL_DOWN  = ["", ".k", "kkk"];
+const CLOSED_EYES = "..kffffffffffk..";
+const HAPPY_EYES  = "..kfnffffffnfk..";
+const HAPPY_MOUTH = "...kffknnkffk...";
+const ALERT_HEAD  = [
+  "..kk........kk..",
+  "..knk......knk..",
+  "..kffkkkkkkffk..",
+];
+
+function frame(opts) {
+  const rows = HEAD.slice();
+  if (opts.alert) rows.splice(0, 3, ...ALERT_HEAD);
+  if (opts.eyes === "closed") rows[4] = CLOSED_EYES;
+  if (opts.eyes === "happy") { rows[4] = HAPPY_EYES; rows[7] = HAPPY_MOUTH; }
+  const tail = opts.tailDown ? TAIL_DOWN : TAIL_UP;
+  rows[5] += tail[0]; rows[6] += tail[1]; rows[7] += tail[2];
+  return rows;
+}
+
+const FRAMES = {
+  sit:    frame({}),
+  sway:   frame({ tailDown: true }),
+  blink:  frame({ eyes: "closed" }),
+  sleep:  frame({ eyes: "closed", tailDown: true }),
+  alert:  frame({ alert: true }),
+  happy:  frame({ eyes: "happy" }),
+};
+
+const canvas = document.getElementById("cat");
+const ctx = canvas.getContext("2d");
+// Backing store at device pixels — the cat stays crisp on retina displays.
+const dpr = Math.max(1, window.devicePixelRatio || 1);
+canvas.width = W * SCALE * dpr;
+canvas.height = H * SCALE * dpr;
+canvas.style.width = W * SCALE + "px";
+canvas.style.height = H * SCALE + "px";
+ctx.scale(dpr, dpr);
+
+// Palette is read from the CSS variables so a theme switch recolors the cat.
+function palette() {
+  const s = getComputedStyle(document.documentElement);
+  return { k: s.getPropertyValue("--text").trim() || "#E0E5EC",
+           f: s.getPropertyValue("--accent").trim() || "#4A6CF7",
+           n: s.getPropertyValue("--magenta").trim() || "#D670D6",
+           e: s.getPropertyValue("--bg").trim() || "#2B2D3A" };
+}
+
+function draw(name) {
+  const pal = palette();
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  FRAMES[name].forEach((row, y) => {
+    for (let x = 0; x < W; x++) {
+      const c = row[x];
+      if (c === "." || c === undefined) continue;
+      ctx.fillStyle = pal[c];
+      ctx.fillRect(x * SCALE, y * SCALE, SCALE, SCALE);
+    }
+  });
+}
+draw("sit");
+
+// Dev hook: #frame=<name> draws one frame and freezes — for screenshots.
+const hook = location.hash.match(/^#frame=(\w+)$/);
+if (hook && FRAMES[hook[1]]) {
+  draw(hook[1]);
+  throw new Error("frame preview");   // stop: no scheduler, no bridge
+}
+
+// ── Host bridge (the tiny slice a pure-frontend plugin needs) ─────────────
+// No exec — just theme (hello), lifecycle (visibility), and content-driven
+// size reports: the sandbox hides content size from the host, so the plugin
+// measures its own shrink-wrapped body and keeps the host current.
+
+window.addEventListener("message", (e) => {
+  const m = e.data;
+  if (!m || typeof m !== "object" || m.v !== 1) return;
+  if (m.evt === "hello" && m.payload) {
+    for (const [k, v] of Object.entries(m.payload.theme ?? {}))
+      document.documentElement.style.setProperty(k, v);
+    draw(cat.frame);
+  }
+  if (m.evt === "visibility" && typeof m.payload?.visible === "boolean")
+    setVisible(m.payload.visible);
+});
+
+let sizeTimer = null;
+function reportSize() {
+  const w = Math.ceil(document.body.getBoundingClientRect().width);
+  if (w > 0) parent.postMessage({ v: 1, id: "size", cmd: "size", payload: { width: w } }, "*");
+}
+function scheduleSizeReport() {
+  if (sizeTimer !== null) return;
+  sizeTimer = setTimeout(() => {
+    sizeTimer = null;
+    reportSize();
+    // The segment may have just shrunk (quip faded) — pull the cat back
+    // inside the pen so it is never clipped or stranded mid-air.
+    if (cat.shift > room()) setShift(room());
+  }, 50);
+}
+scheduleSizeReport();
+new ResizeObserver(scheduleSizeReport).observe(document.body);
+
+// ── Behavior ──────────────────────────────────────────────────────────────
+
+const quipEl = document.getElementById("quip");
+const pen = document.getElementById("pen");
+const QUIPS = ["meow", "nya~", "mrrp!", "prrrrr", "$ sudo pet me", "exit 0",
+               "uptime: still cute", "psst… try htop", "=^.^=", "nya?"];
+
+const cat = {
+  frame: "sit",
+  timers: [],
+  visible: true,
+  shift: 0,            // px offset from the left edge (walking)
+  lastAction: Date.now(),
+  sleeping: false,
+};
+
+function drawCat(name) { cat.frame = name; draw(name); }
+
+function later(ms, fn) { cat.timers.push(setTimeout(fn, ms)); }
+function stopTimers() { cat.timers.forEach(clearTimeout); cat.timers = []; }
+
+function setShift(px) {
+  cat.shift = Math.max(0, px);
+  pen.style.transform = `translateX(${cat.shift}px)`;
+}
+function room() { return document.body.clientWidth - canvas.clientWidth - 4; }
+
+// Quip dismissal is deliberately OUTSIDE cat.timers: a click (stopTimers)
+// must not orphan the quip text — a stuck quip keeps the shrink-wrapped body
+// wide forever and the cat stranded mid-segment.
+let quipTimers = [];
+function quip(text, ms = 2600) {
+  quipEl.textContent = text;
+  quipEl.classList.add("show");
+  quipTimers.forEach(clearTimeout);
+  quipTimers = [
+    setTimeout(() => quipEl.classList.remove("show"), ms + 300),
+    // Clear AFTER the fade-out so the shrink-wrapped width collapses back.
+    setTimeout(() => { if (quipEl.textContent === text) quipEl.textContent = ""; }, ms + 650),
+  ];
+}
+
+function animate(className) {
+  canvas.classList.remove("hop", "wiggle", "purr", "bounce");
+  void canvas.offsetWidth;                    // restart the keyframes
+  canvas.classList.add(className);
+}
+
+// Idle: tail sway + occasional blink; then schedule the next move.
+function idle() {
+  let sway = false;
+  const beat = () => {
+    sway = !sway;
+    drawCat(cat.sleeping ? "sleep" : sway ? "sway" : "sit");
+    if (!cat.sleeping && Math.random() < 0.04) {
+      drawCat("blink");
+      later(150, () => drawCat(sway ? "sway" : "sit"));
+    }
+  };
+  beat();
+  const interval = setInterval(beat, 750);
+  cat.timers.push(interval);
+
+  later(3000 + Math.random() * 6000, () => {
+    clearInterval(interval);
+    chooseAction();
+  });
+}
+
+function chooseAction() {
+  const idleFor = Date.now() - cat.lastAction;
+  const roll = Math.random();
+  if (!cat.sleeping && idleFor > 40000 && roll < 0.4) return sleep();
+  if (roll < 0.45) return walk();
+  if (roll < 0.65) return react(true);
+  if (roll < 0.8) return quip(QUIPS[(Math.random() * QUIPS.length) | 0]);
+  idle();
+}
+
+function walk() {
+  cat.lastAction = Date.now();
+  // Sometimes speak first — a visible quip widens the segment, giving room
+  // to strut. Without one, the per-step clamp turns the walk into an in-place
+  // trot. One code path, no special case.
+  if (Math.random() < 0.5) quip(QUIPS[(Math.random() * QUIPS.length) | 0], 3500);
+  const dir = Math.random() < 0.5 ? 1 : -1;
+  const steps = 4 + ((Math.random() * 8) | 0);
+  animate("bounce");
+  pen.classList.add("walk");
+  let i = 0;
+  const stepper = setInterval(() => {
+    setShift(Math.min(room(), cat.shift + dir * 6));
+    if (++i >= steps) {
+      clearInterval(stepper);
+      canvas.classList.remove("bounce");
+      pen.classList.remove("walk");
+      idle();
+    }
+  }, 160);
+  cat.timers.push(stepper);
+}
+
+function sleep() {
+  cat.sleeping = true;
+  setShift(0);
+  drawCat("sleep");
+  quip("z z z…", 4000);
+  later(15000 + Math.random() * 15000, () => { if (cat.sleeping) wake(); else idle(); });
+}
+
+function wake() {
+  cat.sleeping = false;
+  cat.lastAction = Date.now();
+  animate("hop");
+  drawCat("alert");
+  quip("!");
+  later(600, idle);
+}
+
+// Click (and the occasional idle tic): pick a reaction.
+function react(silent) {
+  cat.lastAction = Date.now();
+  const roll = Math.random();
+  if (roll < 0.3) {
+    animate("hop");
+    if (!silent) quip(QUIPS[(Math.random() * QUIPS.length) | 0]);
+    later(500, idle);
+  } else if (roll < 0.55) {
+    animate("wiggle");
+    drawCat("happy");
+    if (!silent) quip("=^.^=");
+    later(600, () => { drawCat("sit"); idle(); });
+  } else if (roll < 0.8) {
+    animate("purr");
+    if (!silent) quip("prrrrr");
+    later(1200, idle);
+  } else {
+    drawCat("alert");
+    if (!silent) quip("mrrp!");
+    later(700, idle);
+  }
+}
+
+document.body.addEventListener("click", () => {
+  stopTimers();
+  canvas.classList.remove("bounce");
+  pen.classList.remove("walk");
+  if (cat.sleeping) wake();
+  else react(false);
+});
+
+function setVisible(v) {
+  if (cat.visible === v) return;   // host event + visibilitychange can double-fire
+  cat.visible = v;
+  stopTimers();
+  quipTimers.forEach(clearTimeout);
+  quipTimers = [];
+  quipEl.classList.remove("show");
+  quipEl.textContent = "";         // collapse the width back before hiding
+  if (v) idle();
+  // hidden: timers cleared, nothing runs; the host keeps the iframe alive
+}
+// Standalone (no host): follow the document's own visibility.
+document.addEventListener("visibilitychange", () => setVisible(!document.hidden));
+
+idle();
+</script>
+</body>
+</html>

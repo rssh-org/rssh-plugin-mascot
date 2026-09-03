@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<script>
+  // Static preview — no bridge. The plugin manager passes the host theme in
+  // the URL fragment (#rssh-theme=<encoded json>); apply it as CSS variables.
+  try {
+    const m = location.hash.match(/(?:^#|&)rssh-theme=([^&]+)/);
+    if (m) {
+      for (const [k, v] of Object.entries(JSON.parse(decodeURIComponent(m[1]))))
+        document.documentElement.style.setProperty(k, v);
+    }
+  } catch (e) { /* standalone: keep the fallback literals below */ }
+</script>
+<style>
+  /* rssh theme tokens; literals are rssh's dark values (standalone fallback). */
+  :root { --bg:#2B2D3A; --text:#E0E5EC; --text-dim:#6B7A99;
+          --accent:#4A6CF7; --magenta:#D670D6; }
+  html, body { margin:0; height:100%; }
+  body {
+    width:fit-content;
+    padding:0 4px;
+    display:flex; align-items:center; gap:7px;
+    overflow:hidden;
+    background:var(--bg);
+    user-select:none; -webkit-user-select:none;
+    font:11px/1 var(--term-font, ui-monospace,SFMono-Regular,Menlo,Consolas,monospace);
+  }
+  #quip { color:var(--text-dim); white-space:nowrap; }
+</style>
+</head>
+<body>
+  <canvas id="cat" width="32" height="22"></canvas>
+  <span id="quip">=^.^= hi</span>
+<script>
+"use strict";
+// Static pose: the live plugin's sit frame (16×11 grid at scale 2).
+// Chars: k outline(--text) f fur(--accent) n pink(--magenta) e eye(--bg).
+const ROWS = [
+  "...kk......kk...",
+  "...knk....knk...",
+  "...kffkkkkffk...",
+  "..kffffffffffk..",
+  "..kfeeffffeefk..",
+  "..kffffffffffk.k",
+  "..kffffnnffffkkk",
+  "...kfffkkfffk.k.",
+  "..kffkkkkkkffk..",
+  ".kffffffffffffk.",
+  "..kk.kk..kk.kk..",
+];
+const canvas = document.getElementById("cat");
+const ctx = canvas.getContext("2d");
+const dpr = Math.max(1, window.devicePixelRatio || 1);
+canvas.width = 32 * dpr;
+canvas.height = 22 * dpr;
+canvas.style.width = "32px";
+canvas.style.height = "22px";
+ctx.scale(dpr, dpr);
+const s = getComputedStyle(document.documentElement);
+const pal = { k: s.getPropertyValue("--text").trim() || "#E0E5EC",
+              f: s.getPropertyValue("--accent").trim() || "#4A6CF7",
+              n: s.getPropertyValue("--magenta").trim() || "#D670D6",
+              e: s.getPropertyValue("--bg").trim() || "#2B2D3A" };
+ROWS.forEach((row, y) => {
+  for (let x = 0; x < 16; x++) {
+    const c = row[x];
+    if (c === "." || c === undefined) continue;
+    ctx.fillStyle = pal[c];
+    ctx.fillRect(x * 2, y * 2, 2, 2);
+  }
+});
+</script>
+</body>
+</html>

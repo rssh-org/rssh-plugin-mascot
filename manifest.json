@@ -1,0 +1,10 @@
+{
+  "id": "rssh-pixel-cat",
+  "name": "Pixel Cat",
+  "version": "1.0.0",
+  "description": "A tiny pixel cat that lives in the strip - sways its tail, blinks, wanders, naps, and reacts when you click it.",
+  "author": "rssh",
+  "area": "strip",
+  "preview": "preview.html",
+  "api": 1
+}

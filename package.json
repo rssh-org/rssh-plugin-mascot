@@ -1,0 +1,13 @@
+{
+  "name": "rssh-plugin-mascot",
+  "version": "1.0.0",
+  "private": true,
+  "description": "rssh strip plugin: a pixel cat mascot. Pure frontend - no exec, no build step.",
+  "type": "module",
+  "scripts": {
+    "package": "node scripts/package.mjs"
+  },
+  "devDependencies": {
+    "jszip": "^3.10.1"
+  }
+}
