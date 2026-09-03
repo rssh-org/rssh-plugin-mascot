@@ -1,3 +1,5 @@
+<img width="2400" height="1600" alt="image" src="https://github.com/user-attachments/assets/3a2dcb73-3ebc-452e-9516-332f15e9baa8" />
+
 # rssh-plugin-mascot
 
 A strip-region plugin for [rssh](https://github.com/rssh-org/rssh): a tiny
